@@ -1,46 +1,72 @@
 import requests
-from datetime import datetime
-
-# === CONFIGURACIÓN INICIAL ===
-ciudad_actual = "Cartagena"
-lat = 10.4006
-lon = -75.5144
-openweather_api = "1fd4e1f2a68bcdf3b85d37cf59e07338"
-telegram_bot_token = "7137024853:AAFBgsW0ZF9tYA3uBTD3q5j9Th1Hfhw7tyA"
-chat_id = "729628766"
+import datetime
+import os
 
 def obtener_datos_clima():
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&lang=es&appid={openweather_api}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        return r.json()
-    return None
+    try:
+        # Obtener IP y ubicación dinámica
+        ip = requests.get("https://api.ipify.org").text
+        ubicacion = requests.get(f"https://ipinfo.io/{ip}/json").json()
+        ciudad = ubicacion.get("city", "Ciudad Desconocida")
+        loc = ubicacion.get("loc", "0,0").split(',')
+        latitud = loc[0]
+        longitud = loc[1]
+
+        # API de OpenWeatherMap
+        api_key = os.getenv("API_KEY")
+        url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitud}&lon={longitud}&appid={api_key}&units=metric&lang=es"
+        clima = requests.get(url).json()
+
+        datos = {
+            "ciudad": ciudad,
+            "ip": ip,
+            "lat": latitud,
+            "lon": longitud,
+            "temperatura": clima["main"]["temp"],
+            "temp_min": clima["main"]["temp_min"],
+            "temp_max": clima["main"]["temp_max"],
+            "sensacion": clima["main"]["feels_like"],
+            "descripcion": clima["weather"][0]["description"],
+            "viento": clima["wind"]["speed"]
+        }
+        return datos
+
+    except Exception as e:
+        return {"error": f"No se pudo obtener el clima: {str(e)}"}
 
 def generar_mensaje(datos):
-    if not datos:
-        return "❌ No se pudo obtener el clima."
+    if "error" in datos:
+        return datos["error"]
 
-    temp = datos['main']['temp']
-    sensacion = datos['main']['feels_like']
-    humedad = datos['main']['humidity']
-    viento = datos['wind']['speed']
-    descripcion = datos['weather'][0]['description'].capitalize()
-    visibilidad = datos.get('visibility', 0) / 1000
+    ahora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    mensaje = f"📍 Ciudad: {ciudad_actual}\n"
-    mensaje += f"🕒 Última lectura: {datetime.now().strftime('%H:%M:%S')}\n\n"
-    mensaje += f"🌡️ Temp: {temp}°C | Sensación: {sensacion}°C\n"
-    mensaje += f"💧 Humedad: {humedad}%\n"
-    mensaje += f"🌬️ Viento: {viento} m/s\n"
-    mensaje += f"🌫️ Visibilidad: {visibilidad:.1f} km\n"
-    mensaje += f"📄 Estado: {descripcion}\n"
+    mensaje = (
+        f"🌦️ *LIORA ALERTA METEOROLÓGICA EXTENDIDA 24/7*\n"
+        f"🕓 Fecha y hora: {ahora}\n"
+        f"📍 Ciudad detectada: {datos['ciudad']}\n"
+        f"🌐 IP: {datos['ip']}\n"
+        f"📡 Coordenadas: {datos['lat']}, {datos['lon']}\n\n"
+        f"🌡️ Temperatura: {datos['temperatura']}°C\n"
+        f"🌡️ Mínima: {datos['temp_min']}°C | Máxima: {datos['temp_max']}°C\n"
+        f"🤒 Sensación térmica: {datos['sensacion']}°C\n"
+        f"🌬️ Viento: {datos['viento']} m/s\n"
+        f"☁️ Estado: {datos['descripcion'].capitalize()}\n\n"
+        f"📲 *UNOSOMOS*"
+    )
     return mensaje
 
-def enviar_mensaje_telegram(texto):
-    url = f"https://api.telegram.org/bot{telegram_bot_token}/sendMessage"
-    data = {"chat_id": chat_id, "text": texto, "parse_mode": "Markdown"}
-    requests.post(url, json=data)
+def enviar_mensaje_telegram(mensaje):
+    token = os.getenv("BOT_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": mensaje,
+        "parse_mode": "Markdown"
+    }
+    requests.post(url, data=data)
 
+# Ejecutar todo
 datos = obtener_datos_clima()
 mensaje = generar_mensaje(datos)
 enviar_mensaje_telegram(mensaje)
