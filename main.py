@@ -1,18 +1,22 @@
 import requests
 import datetime
 import os
+from flask import Flask
+
+# === FLASK PORT para Render ===
+FLASK_PORT = int(os.environ.get("PORT", 3000))
+app = Flask(__name__)
+
+# === Funciones principales ===
 
 def obtener_datos_clima():
     try:
-        # Obtener IP y ubicación dinámica
         ip = requests.get("https://api.ipify.org").text
         ubicacion = requests.get(f"https://ipinfo.io/{ip}/json").json()
         ciudad = ubicacion.get("city", "Ciudad Desconocida")
         loc = ubicacion.get("loc", "0,0").split(',')
-        latitud = loc[0]
-        longitud = loc[1]
+        latitud, longitud = loc[0], loc[1]
 
-        # API de OpenWeatherMap
         api_key = os.getenv("API_KEY")
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitud}&lon={longitud}&appid={api_key}&units=metric&lang=es"
         clima = requests.get(url).json()
@@ -66,8 +70,26 @@ def enviar_mensaje_telegram(mensaje):
     }
     requests.post(url, data=data)
 
-# Punto de entrada principal
-if __name__ == "__main__":
+# === Endpoints para Render ===
+
+@app.route("/")
+def status():
+    return "🟢 Liora-clima activo", 200
+
+@app.route("/clima", methods=["GET"])
+def disparar_alerta():
     datos = obtener_datos_clima()
     mensaje = generar_mensaje(datos)
     enviar_mensaje_telegram(mensaje)
+    return "📨 Alerta enviada por Telegram", 200
+
+# === Inicio del sistema ===
+
+if __name__ == "__main__":
+    # Envío inicial al arrancar
+    datos = obtener_datos_clima()
+    mensaje = generar_mensaje(datos)
+    enviar_mensaje_telegram(mensaje)
+
+    # Levantar servidor web
+    app.run(host="0.0.0.0", port=FLASK_PORT)
