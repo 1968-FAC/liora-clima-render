@@ -66,7 +66,8 @@ def enviar_mensaje_telegram(mensaje):
     }
     requests.post(url, data=data)
 
-# Ejecutar todo
-datos = obtener_datos_clima()
-mensaje = generar_mensaje(datos)
-enviar_mensaje_telegram(mensaje)
+# Punto de entrada principal
+if __name__ == "__main__":
+    datos = obtener_datos_clima()
+    mensaje = generar_mensaje(datos)
+    enviar_mensaje_telegram(mensaje)
