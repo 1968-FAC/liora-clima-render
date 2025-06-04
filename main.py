@@ -3,11 +3,11 @@ import datetime
 import os
 from flask import Flask
 
-# === FLASK PORT para Render ===
+# Configuración para servidor Flask
 FLASK_PORT = int(os.environ.get("PORT", 3000))
 app = Flask(__name__)
 
-# === Funciones principales ===
+# ===== FUNCIONES PRINCIPALES =====
 
 def obtener_datos_clima():
     try:
@@ -15,81 +15,71 @@ def obtener_datos_clima():
         ubicacion = requests.get(f"https://ipinfo.io/{ip}/json").json()
         ciudad = ubicacion.get("city", "Ciudad Desconocida")
         loc = ubicacion.get("loc", "0,0").split(',')
-        latitud, longitud = loc[0], loc[1]
+        lat, lon = loc[0], loc[1]
 
         api_key = os.getenv("API_KEY")
-        url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitud}&lon={longitud}&appid={api_key}&units=metric&lang=es"
+        url = (
+            f"https://api.openweathermap.org/data/2.5/weather?"
+            f"lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=es"
+        )
         clima = requests.get(url).json()
 
-        datos = {
+        return {
             "ciudad": ciudad,
             "ip": ip,
-            "lat": latitud,
-            "lon": longitud,
+            "lat": lat,
+            "lon": lon,
             "temperatura": clima["main"]["temp"],
-            "temp_min": clima["main"]["temp_min"],
-            "temp_max": clima["main"]["temp_max"],
-            "sensacion": clima["main"]["feels_like"],
-            "descripcion": clima["weather"][0]["description"],
-            "viento": clima["wind"]["speed"]
+            "descripcion": clima["weather"][0]["description"].capitalize(),
         }
-        return datos
 
     except Exception as e:
-        return {"error": f"No se pudo obtener el clima: {str(e)}"}
+        return {"error": f"❌ Error al obtener clima: {str(e)}"}
 
 def generar_mensaje(datos):
     if "error" in datos:
         return datos["error"]
 
     ahora = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    mensaje = (
-        f"🌦️ *LIORA ALERTA METEOROLÓGICA EXTENDIDA 24/7*\n"
-        f"🕓 Fecha y hora: {ahora}\n"
-        f"📍 Ciudad detectada: {datos['ciudad']}\n"
+    return (
+        f"🌦️ *LIORA ALERTA CLIMÁTICA*\n"
+        f"🕓 {ahora}\n"
+        f"📍 {datos['ciudad']} ({datos['lat']}, {datos['lon']})\n"
+        f"🌡️ {datos['temperatura']}°C\n"
+        f"☁️ {datos['descripcion']}\n"
         f"🌐 IP: {datos['ip']}\n"
-        f"📡 Coordenadas: {datos['lat']}, {datos['lon']}\n\n"
-        f"🌡️ Temperatura: {datos['temperatura']}°C\n"
-        f"🌡️ Mínima: {datos['temp_min']}°C | Máxima: {datos['temp_max']}°C\n"
-        f"🤒 Sensación térmica: {datos['sensacion']}°C\n"
-        f"🌬️ Viento: {datos['viento']} m/s\n"
-        f"☁️ Estado: {datos['descripcion'].capitalize()}\n\n"
         f"📲 *UNOSOMOS*"
     )
-    return mensaje
 
 def enviar_mensaje_telegram(mensaje):
     token = os.getenv("BOT_TOKEN")
     chat_id = os.getenv("CHAT_ID")
+    if not token or not chat_id:
+        print("⚠️ Falta BOT_TOKEN o CHAT_ID")
+        return
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    data = {
-        "chat_id": chat_id,
-        "text": mensaje,
-        "parse_mode": "Markdown"
-    }
+    data = {"chat_id": chat_id, "text": mensaje, "parse_mode": "Markdown"}
     requests.post(url, data=data)
 
-# === Endpoints para Render ===
+# ===== ENDPOINTS PARA RENDER =====
 
 @app.route("/")
-def status():
-    return "🟢 Liora-clima activo", 200
+def home():
+    return "🟢 Liora-clima vivo", 200
 
-@app.route("/clima", methods=["GET"])
-def disparar_alerta():
+@app.route("/clima")
+def alerta():
     datos = obtener_datos_clima()
     mensaje = generar_mensaje(datos)
     enviar_mensaje_telegram(mensaje)
-    return "📨 Alerta enviada por Telegram", 200
+    return "✅ Alerta enviada a Telegram", 200
 
-# === Inicio del sistema ===
+# ===== INICIO DEL SERVIDOR =====
 
 if __name__ == "__main__":
-    # Envío inicial al arrancar
-    datos = obtener_datos_clima()
-    mensaje = generar_mensaje(datos)
-    enviar_mensaje_telegram(mensaje)
-
-    # Levantar servidor web
-    app.run(host="0.0.0.0", port=FLASK_PORT)
+    # Enviar 1 alerta al iniciar
+    try:
+        datos = obtener_datos_clima()
+        mensaje = generar_mensaje(datos)
+        enviar_mensaje_telegram(mensaje)
+    except Exception
